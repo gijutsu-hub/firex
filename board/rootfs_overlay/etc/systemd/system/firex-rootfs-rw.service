@@ -1,0 +1,33 @@
+[Unit]
+Description=Remount the FireX root filesystem writable
+Documentation=@BRAND_DOC@
+
+# The kernel is handed "root=LABEL=firex-root-a ro" so that the root
+# filesystem can be checked before anything writes to it. Normally fstab
+# carries a "/" line and systemd-remount-fs turns it read-write again --
+# but this image deliberately has no "/" entry, because the label differs
+# per slot and naming one would mount the wrong root after an update.
+#
+# With no entry, nothing ever remounted it, and the appliance ran its
+# whole life on a read-only root: sshd could not create its host keys,
+# logind could not write its state, and the X server could not open
+# /root/.Xauthority or its log file, so the desktop console failed with
+# "Cannot open log file" five times and then gave up.
+#
+# Remounting by mount point rather than by device keeps this slot
+# agnostic -- it works on whichever of the two roots actually booted,
+# and keeps working after an update swaps them.
+DefaultDependencies=no
+After=systemd-fsck-root.service systemd-remount-fs.service
+Before=local-fs.target sysinit.target
+# Nothing to do when the root was already mounted read-write, which is
+# the case on a developer image built with FIREX_ROOT_RW=1.
+ConditionPathIsReadWrite=!/
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/mount -o remount,rw /
+
+[Install]
+WantedBy=sysinit.target

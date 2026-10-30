@@ -1,0 +1,15 @@
+[Unit]
+Description=FireX A/B boot attempt accounting
+Documentation=@BRAND_DOC@
+DefaultDependencies=no
+After=local-fs.target
+Before=firex-segmentation.service firexd.service
+RequiresMountsFor=/var/lib/firex /boot
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/firex-boot-check
+
+[Install]
+WantedBy=multi-user.target

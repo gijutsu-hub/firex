@@ -1,0 +1,156 @@
+#!/bin/sh
+# Starts the FireX desktop console on the local screen.
+#
+# With no arguments it takes over tty1 via startx, which is how
+# firex-gui.service launches it at boot. With DISPLAY already set -- from
+# an SSH session with X forwarding, say -- it starts the console there
+# instead, so the same command works from every direction.
+#
+#   firex-gui            start it
+#   firex-gui --check    say why it would not start
+set -eu
+
+CONF=/etc/firex/firex.conf
+CONSOLE_CONF=/etc/firex/console.conf
+CONSOLE=/usr/local/bin/flamewall
+
+# The port lives under [blockpage] as `port`, so the section has to be
+# tracked. A flat grep for the key picks up netflow_port and the syslog
+# ports instead, and a console pointed at the wrong port reports that the
+# daemon is not running -- which sends you looking in the wrong place.
+read_port() {
+    [ -r "$CONF" ] || return 0
+    awk -F= '
+        /^[ \t]*\[/        { s = $1; gsub(/[ \t]/, "", s) }
+        s == "[blockpage]" && $1 ~ /^[ \t]*port[ \t]*$/ {
+            gsub(/[ \t]/, "", $2); print $2; exit
+        }' "$CONF"
+}
+
+SCREEN="$(sed -n 's/^screen *= *//p' "$CONSOLE_CONF" 2>/dev/null | head -1)"
+: "${SCREEN:=1024x768}"
+PORT="$(read_port)"
+: "${PORT:=8080}"
+
+# GTK4 picks a GPU renderer by default and there is no GPU here. Left to
+# itself it fails to a blank window rather than falling back, so the
+# software renderer is named outright.
+export GSK_RENDERER="${GSK_RENDERER:-cairo}"
+export GDK_BACKEND="${GDK_BACKEND:-x11}"
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+mkdir -p "$XDG_RUNTIME_DIR" 2>/dev/null || true
+chmod 700 "$XDG_RUNTIME_DIR" 2>/dev/null || true
+
+# X writes two files before it will start: an authority file, which it
+# puts in $HOME, and its log, which it puts in /var/log. Both live on the
+# root filesystem, and this appliance mounts that read-only until
+# firex-rootfs-rw.service has run. If anything ever delays or skips that
+# -- a recovery boot, a slot rolled back by hand -- X dies with
+#
+#     xauth: error in locking authority file /root/.Xauthority
+#     (EE) Cannot open log file "/var/log/Xorg.0.log"
+#
+# and the screen stays black with the reason only in the journal. Keeping
+# both on the tmpfs at /run means the console comes up whatever the root
+# filesystem is doing, and neither file is worth keeping across a reboot.
+XRUN=/run/firex
+mkdir -p "$XRUN" 2>/dev/null || true
+chmod 700 "$XRUN" 2>/dev/null || true
+export XAUTHORITY="${XAUTHORITY:-$XRUN/Xauthority}"
+: > "$XAUTHORITY" 2>/dev/null || true
+XLOG="$XRUN/Xorg.0.log"
+
+# ---- diagnosis --------------------------------------------------------
+# A console that will not come up shows a black screen and says nothing.
+# This is the thing to run next, over SSH or from the serial menu.
+if [ "${1:-}" = "--check" ]; then
+    rc=0
+    say() { printf '  %-5s %s\n' "$1" "$2"; [ "$1" = "FAIL" ] && rc=1; return 0; }
+
+    echo
+    echo "FireX desktop console -- readiness"
+    echo
+
+    [ -x "$CONSOLE" ] && say OK "console binary $CONSOLE" \
+                      || say FAIL "$CONSOLE is missing (built with FIREX_DESKTOP=0?)"
+
+    if [ -x "$CONSOLE" ]; then
+        "$CONSOLE" --help >/dev/null 2>&1 \
+            && say OK "it runs (GTK4 libraries resolve)" \
+            || say FAIL "it will not run -- try: $CONSOLE --help"
+    fi
+
+    command -v startx >/dev/null 2>&1 && say OK "startx present" \
+                                      || say FAIL "startx missing (xinit not installed)"
+    command -v Xorg   >/dev/null 2>&1 && say OK "Xorg present" \
+                                      || say FAIL "Xorg missing"
+
+    # X needs a framebuffer or a DRM device. With neither it exits with
+    # "no screens found" and the monitor simply stays dark.
+    if [ -e /dev/fb0 ] || [ -e /dev/dri/card0 ]; then
+        say OK "framebuffer: $( [ -e /dev/dri/card0 ] && echo /dev/dri/card0 || echo /dev/fb0 )"
+    else
+        say FAIL "no /dev/fb0 and no /dev/dri/card0 -- X has nothing to draw on"
+        echo "        GRUB must hand the kernel a framebuffer. Check that"
+        echo "        /boot/grub/grub.cfg has 'set gfxpayload=keep'."
+    fi
+
+    [ -f /etc/X11/xorg.conf.d/10-firex.conf ] \
+        && say OK "Xorg config pins $SCREEN" \
+        || say WARN "no /etc/X11/xorg.conf.d/10-firex.conf; X will pick its own mode"
+
+    # A read-only root is the one failure that looks like a broken
+    # console and is not: X dies on its own log file before it ever
+    # touches the screen.
+    if [ -w / ]; then
+        say OK "root filesystem is writable"
+    else
+        say WARN "root filesystem is read-only (X writes to $XRUN instead)"
+        echo "        systemctl status firex-rootfs-rw.service"
+    fi
+
+    # The console is a client of the daemon: no daemon, no sign-in.
+    if command -v ss >/dev/null 2>&1 && ss -ltn 2>/dev/null | grep -q ":$PORT "; then
+        say OK "daemon listening on port $PORT"
+    elif command -v systemctl >/dev/null 2>&1 \
+         && systemctl is-active --quiet firexd 2>/dev/null; then
+        say WARN "firexd is active but nothing is listening on $PORT yet"
+    else
+        say FAIL "nothing is listening on port $PORT -- systemctl status firexd"
+    fi
+
+    if command -v systemctl >/dev/null 2>&1; then
+        systemctl is-enabled --quiet firex-gui.service 2>/dev/null \
+            && say OK "firex-gui.service is enabled" \
+            || say WARN "firex-gui.service is not enabled"
+        if systemctl is-active --quiet getty@tty1.service 2>/dev/null; then
+            say WARN "getty@tty1 is running; it and the console share tty1"
+        fi
+    fi
+
+    echo
+    [ "$rc" = 0 ] && echo "  Ready. Start it with: systemctl restart firex-gui" \
+                  || echo "  Not ready. Fix the FAIL lines above."
+    echo "  Logs: journalctl -u firex-gui -n 50 --no-pager"
+    echo "  X:    cat $XLOG"
+    echo
+    exit "$rc"
+fi
+
+# ---- start ------------------------------------------------------------
+[ -x "$CONSOLE" ] || { echo "firex-gui: $CONSOLE is not installed" >&2; exit 1; }
+
+if [ -n "${DISPLAY:-}" ]; then
+    exec "$CONSOLE" --port "$PORT" --size "$SCREEN" "$@"
+fi
+
+command -v startx >/dev/null 2>&1 || {
+    echo "firex-gui: no X server in this image; use the web console at" >&2
+    echo "           http://<appliance>:$PORT/ui" >&2
+    exit 1
+}
+
+# -nolisten tcp: the console talks to the daemon over loopback, so the X
+# server never needs a network socket of its own.
+exec startx /usr/local/bin/firex-session -- :0 vt1 -nolisten tcp -keeptty \
+    -logfile "$XLOG"

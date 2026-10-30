@@ -1,0 +1,26 @@
+[Unit]
+Description=Generate this appliance's SSH host keys
+Documentation=@BRAND_DOC@
+
+# The image ships with no host keys on purpose. Baking them in would give
+# every FireX appliance ever built the same identity, so anyone holding
+# one image could impersonate all of them -- and a key they all share is
+# a key an attacker already has.
+#
+# They are made here on the first boot instead, which is also the only
+# moment they can be: openssh's own postinst does this when the package
+# is installed, and that is skipped in a chroot, so without this unit
+# sshd exits with "no hostkeys available" and ssh.service burns its
+# start limit before the appliance has finished booting.
+After=firex-rootfs-rw.service
+Requires=firex-rootfs-rw.service
+Before=ssh.service
+ConditionPathExists=!/etc/ssh/ssh_host_ed25519_key
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/ssh-keygen -A
+
+[Install]
+WantedBy=multi-user.target

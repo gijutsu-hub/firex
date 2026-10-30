@@ -1,0 +1,39 @@
+#!/bin/sh
+#
+# Charges one boot attempt against the running slot.
+#
+# A slot that was just updated is PENDING with a budget of attempts.
+# firex-confirm clears it once the appliance is actually up. If the budget
+# runs out first, firexd marks the slot bad, points the next boot back at
+# the slot that was working, and exits 3 -- and this script makes that
+# decision real by rewriting grub.cfg before rebooting. Without that
+# rewrite the bootloader would keep choosing the slot that just failed.
+set -u
+
+FIREXD=/usr/local/bin/firexd
+
+"$FIREXD" --boot-attempt
+rc=$?
+
+case "$rc" in
+0)  # Still within budget, or nothing pending. Keep grub.cfg in step with
+    # whatever the attempt did to the slot state.
+    "$FIREXD" --write-grub /boot/grub/grub.cfg >/dev/null 2>&1 || true
+    exit 0
+    ;;
+3)  logger -t firex -p daemon.crit \
+        "this slot used up its boot attempts; falling back to the other slot"
+    if ! "$FIREXD" --write-grub /boot/grub/grub.cfg; then
+        logger -t firex -p daemon.crit \
+            "could not rewrite grub.cfg; NOT rebooting, because a reboot now \
+would land back here"
+        exit 1
+    fi
+    sync
+    systemctl reboot
+    exit 0
+    ;;
+*)  logger -t firex -p daemon.err "firexd --boot-attempt failed ($rc)"
+    exit 0      # never block the boot on bookkeeping
+    ;;
+esac

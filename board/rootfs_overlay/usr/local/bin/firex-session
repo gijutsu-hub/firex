@@ -1,0 +1,27 @@
+#!/bin/sh
+# The X session: one window, no desktop, nothing else to click.
+#
+# Restarting is systemd's job, not this script's. A loop here would hide
+# a console that cannot start behind an endless retry, with nothing in
+# `systemctl status` to say so and no start limit to stop it.
+set -eu
+
+SCREEN="$(sed -n 's/^screen *= *//p' /etc/firex/console.conf 2>/dev/null | head -1)"
+: "${SCREEN:=1024x768}"
+
+PORT="$(awk -F= '
+    /^[ \t]*\[/        { s = $1; gsub(/[ \t]/, "", s) }
+    s == "[blockpage]" && $1 ~ /^[ \t]*port[ \t]*$/ {
+        gsub(/[ \t]/, "", $2); print $2; exit
+    }' /etc/firex/firex.conf 2>/dev/null)"
+: "${PORT:=8080}"
+
+# An appliance screen that blanks after ten minutes looks like one that
+# has crashed, and there is no keyboard shortcut on the list to wake it.
+xset s off     2>/dev/null || true
+xset -dpms     2>/dev/null || true
+xset s noblank 2>/dev/null || true
+
+export GSK_RENDERER="${GSK_RENDERER:-cairo}"
+
+exec /usr/local/bin/flamewall --kiosk --port "$PORT" --size "$SCREEN"

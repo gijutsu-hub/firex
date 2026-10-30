@@ -1,0 +1,38 @@
+[Unit]
+Description=@BRAND_FULL@ - @BRAND_TAGLINE@
+Documentation=@BRAND_DOC@
+After=firex-segmentation.service network.target
+Requires=firex-segmentation.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/firexd \
+    --enterprise-config /etc/firex/firex.conf \
+    --rules /etc/firex/rules.conf \
+    --users /etc/firex/users \
+    --engine nfqueue \
+    --blockpage-port 8080 \
+    --log /var/log/firex/decisions.log
+
+# SIGHUP re-reads /etc/firex/firex.conf. It is validated before anything is
+# touched, and a failed apply restores what was running, so a reload cannot
+# strand the appliance on a broken config.
+ExecReload=/bin/kill -HUP $MAINPID
+
+# Refuse to start on a config that will not load, rather than coming up with
+# an empty policy.
+ExecStartPre=/usr/local/bin/firexd --check -c /etc/firex/firex.conf
+
+Restart=on-failure
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+# firexd needs raw sockets, BPF and netfilter; it is not a sandboxable service.
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW CAP_BPF CAP_SYS_ADMIN
+LogsDirectory=firex
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

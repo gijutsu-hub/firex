@@ -1,0 +1,17 @@
+[Unit]
+Description=FireX A/B boot confirmation
+Documentation=@BRAND_DOC@
+After=firexd.service
+Requires=firexd.service
+RequiresMountsFor=/var/lib/firex /boot
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# Give firexd a moment to fail noisily if it is going to. Confirming a slot
+# whose firexd dies three seconds later would pin a broken system.
+ExecStartPre=/bin/sleep 30
+ExecStart=/usr/local/bin/firex-confirm
+
+[Install]
+WantedBy=multi-user.target

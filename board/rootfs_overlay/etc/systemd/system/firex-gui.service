@@ -1,0 +1,56 @@
+[Unit]
+Description=FireX desktop console on the local screen
+Documentation=@BRAND_DOC@
+
+# The console signs in against the daemon, so starting before it is up
+# means a first screen that says the daemon is not running.
+After=firexd.service systemd-user-sessions.service
+Wants=firexd.service
+
+# Plymouth owns /dev/fb0 until it quits. Starting X while it still holds
+# the framebuffer gives a black screen and "no screens found" in the log,
+# which looks exactly like a console that is broken.
+#
+# Ordering after the wait is enough. It must NOT also conflict with
+# plymouth-quit.service, the way a display manager does: a display
+# manager ends the splash itself, this console does not, so conflicting
+# it away drops the only job that tells plymouthd to quit. Then
+# plymouth-quit-wait blocks for ever, and because this unit waits on it
+# the console never starts at all -- a boot that stops dead at
+# "Job plymouth-quit-wait.service/start running (4min 44s / no limit)".
+After=plymouth-quit-wait.service
+
+# getty@tty1 claims the same VT. Left alone, systemd starts both and the
+# login prompt and the X server take turns owning the screen. Conflicts
+# stops the getty while the console runs -- and lets it come back if the
+# console ever gives up, so the appliance is never left with no way in.
+After=getty@tty1.service
+Conflicts=getty@tty1.service
+
+ConditionPathExists=/usr/local/bin/flamewall
+ConditionPathExists=/usr/bin/startx
+
+# If X cannot start at all -- no framebuffer, no driver -- restarting for
+# ever just keeps killing the getty, and the operator is left with a
+# flickering screen and no prompt. After five quick failures it gives up
+# and tty1 goes back to being a text login, which is recoverable.
+StartLimitIntervalSec=120
+StartLimitBurst=5
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/firex-gui
+# startx wants a real tty to claim; tty1 is the one the splash hands over.
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+StandardInput=tty
+StandardOutput=journal
+StandardError=journal
+User=root
+
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=graphical.target multi-user.target

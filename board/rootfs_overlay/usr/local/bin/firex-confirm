@@ -1,0 +1,21 @@
+#!/bin/sh
+#
+# Marks the running slot good.
+#
+# systemd only reaches this unit when firexd itself started, which is the
+# definition of a successful boot used here: the appliance came up far
+# enough to be running its firewall. Anything weaker -- "the kernel booted"
+# -- would confirm a slot that cannot actually serve traffic.
+set -u
+
+FIREXD=/usr/local/bin/firexd
+
+if ! systemctl is-active --quiet firexd.service; then
+    logger -t firex -p daemon.warning \
+        "firexd is not active; leaving this slot unconfirmed"
+    exit 0
+fi
+
+"$FIREXD" --confirm-boot || exit 0
+"$FIREXD" --write-grub /boot/grub/grub.cfg >/dev/null 2>&1 || true
+logger -t firex "boot confirmed; this slot is now the one to fall back to"

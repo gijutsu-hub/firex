@@ -1,0 +1,29 @@
+[Unit]
+Description=FireX serial console menu
+Documentation=@BRAND_DOC@
+After=firexd.service
+ConditionPathExists=/dev/ttyS0
+
+# The serial port is the last way into an appliance whose screen or
+# network has failed, so this unit must never give up on it. With the
+# default start limit, five quick exits -- an operator pressing Ctrl-D a
+# few times is enough -- leave the serial line dead until the next
+# reboot, with nothing printed on it to say why.
+StartLimitIntervalSec=0
+
+[Service]
+Type=idle
+ExecStart=/usr/local/bin/firexd --menu --no-apply -c /etc/firex/firex.conf
+StandardInput=tty
+StandardOutput=tty
+StandardError=journal
+TTYPath=/dev/ttyS0
+TTYReset=yes
+TTYVHangup=yes
+# The menu is the console: when an operator logs out of it, offer it again
+# rather than leaving a bare prompt on the serial line.
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

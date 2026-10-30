@@ -1,0 +1,17 @@
+[Unit]
+Description=Bring the FireX management link up and find it an address
+Documentation=@BRAND_DOC@
+After=network.target
+# Before the console so the login screen has a real address to show
+# rather than "down, no address" on every port.
+Before=firex-gui.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/firex-mgmt-link
+# Never hold the boot up for a link that is not plugged in.
+TimeoutStartSec=60
+
+[Install]
+WantedBy=multi-user.target

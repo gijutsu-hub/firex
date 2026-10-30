@@ -1,0 +1,18 @@
+[Unit]
+Description=FireX segmentation prerequisites
+Documentation=@BRAND_DOC@
+DefaultDependencies=no
+After=systemd-modules-load.service
+Before=network-pre.target firexd.service
+Wants=network-pre.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/etc/firex/segmentation-up.sh
+ExecStop=/etc/firex/segmentation-down.sh
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

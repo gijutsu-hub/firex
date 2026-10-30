@@ -1,0 +1,93 @@
+#!/bin/sh
+# Brings the appliance's links up and finds it a management address.
+#
+# /etc/network/interfaces lists nothing: the ports are FireX's to hand
+# out, not ifupdown's, and the operator assigns them from the console.
+# But until that happens every link sits DOWN with no address, so the
+# login screen reads
+#
+#     enp0s3   down, no address
+#     Web      http://<appliance>:8080/ui
+#
+# and there is no appliance to reach. A firewall nobody can connect to on
+# its first boot is not much of a firewall.
+#
+# So: bring every physical link up, and if none of them has an address
+# once the carriers have settled, ask DHCP for one on the first link that
+# is actually plugged in. That is what the operator would do by hand, and
+# it is the same first-boot behaviour a pfSense box has.
+#
+# It only ever acts when there is NO address anywhere. The moment anyone
+# -- the operator through the console, or firexd applying its own
+# configuration -- has given a link an address, this does nothing, so it
+# cannot fight the daemon for control of an interface.
+set -eu
+
+STATE="${FIREX_MGMT_STATE:-/run/firex-mgmt-link.state}"
+
+# Overridable so the test suite can point this at a fixture directory and
+# exercise the selection rules without touching the links of whatever
+# machine the tests happen to be running on.
+SYSNET="${FIREX_SYSNET:-/sys/class/net}"
+DRYRUN="${FIREX_MGMT_DRYRUN:-0}"
+
+run() {
+    if [ "$DRYRUN" = 1 ]; then printf 'would: %s\n' "$*"; return 0; fi
+    "$@"
+}
+
+physical_links() {
+    for d in "$SYSNET"/*; do
+        [ -e "$d/device" ] || continue          # skip lo, bridges, veth
+        printf '%s\n' "${d##*/}"
+    done
+}
+
+has_global_address() {
+    [ "$DRYRUN" = 1 ] && return "${FIREX_MGMT_HAVE_ADDR:-1}"
+    ip -4 -o addr show scope global 2>/dev/null | grep -q .
+}
+
+for ifc in $(physical_links); do
+    run ip link set "$ifc" up 2>/dev/null || true
+done
+
+# Carrier detection is not instant after the link is brought up; a second
+# or two of patience here saves a pointless DHCP attempt on a port that
+# is about to come up anyway.
+i=0
+while [ "$i" -lt 10 ]; do
+    has_global_address && { echo "address already configured" > "$STATE"; exit 0; }
+    for ifc in $(physical_links); do
+        [ "$(cat "$SYSNET/$ifc/carrier" 2>/dev/null || echo 0)" = 1 ] && break 2
+    done
+    i=$((i + 1))
+    [ "$DRYRUN" = 1 ] || sleep 1
+done
+
+if has_global_address; then
+    echo "address already configured" > "$STATE"
+    exit 0
+fi
+
+for ifc in $(physical_links); do
+    [ "$(cat "$SYSNET/$ifc/carrier" 2>/dev/null || echo 0)" = 1 ] || continue
+    for client in \
+        "dhcpcd --oneshot --timeout 20 $ifc" \
+        "dhclient -1 -timeout 20 $ifc"
+    do
+        set -- $client
+        [ "$DRYRUN" = 1 ] || command -v "$1" >/dev/null 2>&1 || continue
+        if run "$@" >/dev/null 2>&1; then
+            # A dry run has no real lease to look for, so the attempt
+            # itself is the thing being recorded.
+            if [ "$DRYRUN" = 1 ] || has_global_address; then
+                echo "dhcp on $ifc via $1" > "$STATE"
+                exit 0
+            fi
+        fi
+    done
+done
+
+echo "no address: set one from the console (option 3)" > "$STATE"
+exit 0

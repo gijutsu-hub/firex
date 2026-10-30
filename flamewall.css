@@ -1,0 +1,77 @@
+/* FlameWall theme. Edited here, picked up at startup without a rebuild;
+   delete this file to fall back to the stylesheet compiled into the binary. */
+
+window { background-color: #1a1a2e; }
+
+.header-bar { background: linear-gradient(to right, #16213e, #0f3460); }
+
+.sidebar { background-color: #16213e; padding: 10px; }
+.sidebar button {
+  background: transparent; color: #e0e0e0;
+  border: none; padding: 12px 20px; margin: 2px 0;
+  font-size: 14px; border-radius: 8px;
+}
+.sidebar button:hover { background-color: #1a1a40; }
+.sidebar button:checked {
+  background: linear-gradient(135deg, #e94560, #533483);
+  color: white; font-weight: bold;
+}
+
+.card {
+  background-color: #16213e; border-radius: 12px;
+  padding: 20px; margin: 8px;
+}
+.stat-card {
+  background: linear-gradient(135deg, #0f3460, #16213e);
+  border-radius: 12px; padding: 15px; margin: 5px;
+}
+.stat-number { font-size: 28px; font-weight: bold; color: #e94560; }
+.stat-label  { font-size: 12px; color: #8888aa; }
+
+.status-running { color: #00ff88; font-weight: bold; }
+.status-stopped { color: #e94560; font-weight: bold; }
+
+.rule-allow { color: #00ff88; }
+.rule-block { color: #e94560; }
+.rule-log   { color: #ffcc00; }
+
+.title-text    { font-size: 24px; font-weight: bold; color: white; }
+.subtitle-text { font-size: 14px; color: #8888aa; }
+
+label { color: #e0e0e0; }
+
+entry {
+  background-color: #0f3460; color: white;
+  border: 1px solid #533483; border-radius: 6px;
+  padding: 8px;
+}
+entry:focus { border-color: #e94560; }
+
+button.start-btn {
+  background: linear-gradient(135deg, #00ff88, #00cc66);
+  color: #1a1a2e; font-weight: bold;
+  border-radius: 8px; padding: 10px 20px;
+}
+button.stop-btn {
+  background: linear-gradient(135deg, #e94560, #c23152);
+  color: white; font-weight: bold;
+  border-radius: 8px; padding: 10px 20px;
+}
+button.add-btn {
+  background: linear-gradient(135deg, #533483, #0f3460);
+  color: white; border-radius: 8px; padding: 8px 16px;
+}
+
+.log-view {
+  background-color: #0d1117; color: #c9d1d9;
+  font-family: monospace; font-size: 12px;
+}
+
+treeview { background-color: #16213e; color: #e0e0e0; }
+treeview:selected { background-color: #533483; color: white; }
+columnview { background-color: #16213e; color: #e0e0e0; }
+columnview > header { background-color: #0f3460; color: white; }
+
+.chart-area { background-color: #0d1117; border-radius: 8px; }
+dropdown { background-color: #0f3460; color: white; }
+switch:checked slider { background-color: #00ff88; }

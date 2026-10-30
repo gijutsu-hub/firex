@@ -1,0 +1,42 @@
+# Build output
+build/
+*.o
+*.d
+xdp/*.bpf.o
+
+# Compiled binaries produced in the source tree
+flamewall
+firexd
+firex-bundle
+
+# Runtime logs and captures
+flamewall.log
+flamewall_logs.csv
+*.log
+
+# The private half of the firmware signing key. It never belongs in the
+# repository: anyone holding it can sign a bundle this appliance will
+# install and boot. Generate your own with `make bundle-tool && ./firex-bundle
+# keygen --out firex-signing`; only the .pub is distributed, because that
+# is all the appliance needs in order to verify one.
+firex-signing
+
+# Generated TLS material for the console
+*.pem
+*.key
+*.crt
+!board/**/*.crt
+
+# Images and VM disks
+*.img
+*.iso
+*.vdi
+*.vmdk
+*.qcow2
+
+# Editor and OS noise
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store

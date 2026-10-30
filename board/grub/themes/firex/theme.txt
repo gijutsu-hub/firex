@@ -1,0 +1,65 @@
+# FireX -- GRUB menu theme.
+#
+# background.png is board/splash/grub.png, which puts the mark and the
+# wordmark in the top third and leaves the band below for this menu. Keep
+# the two in step: moving the boot_menu here without regenerating the
+# artwork lands the menu text on top of the logo.
+#
+# "GNU Unifont Regular 16" is the name carried INSIDE the stock
+# unicode.pf2 that grub-common ships -- read it with
+# `strings /usr/share/grub/unicode.pf2 | head`, do not guess. GRUB matches
+# a theme font by that internal name, not by the file name, and a name it
+# cannot match leaves the menu with no text at all. It is the only font
+# the image installs, so it is the only one that may be named here.
+
+desktop-image: "background.png"
+desktop-color: "#0B0E14"
+title-text: ""
+terminal-font: "GNU Unifont Regular 16"
+terminal-left: "6%"
+terminal-top: "6%"
+terminal-width: "88%"
+terminal-height: "88%"
+
++ boot_menu {
+    left         = "20%"
+    top          = "54%"
+    width        = "60%"
+    height       = "22%"
+
+    item_font            = "GNU Unifont Regular 16"
+    item_color           = "#8FA0B8"
+    selected_item_color  = "#FF4B2B"
+    item_height          = 26
+    item_spacing         = 6
+    item_padding         = 4
+
+    scrollbar            = false
+}
+
+# Which keys do what. GRUB says none of this on its own, and an appliance
+# that drops to a five-second menu should say how to stop it.
+# Clear of the byline baked into background.png, which sits about 54px
+# from the bottom edge. At 88% this line ended flush against the top of
+# the byline (BRAND_AUTHOR) with no air between them at all.
++ label {
+    left   = "0%"
+    top    = "83%"
+    width  = "100%"
+    align  = "center"
+    font   = "GNU Unifont Regular 16"
+    color  = "#4E5C70"
+    text   = "Enter boots   E edits the kernel line   C opens a command line"
+}
+
++ progress_bar {
+    id        = "__timeout__"
+    left      = "35%"
+    top       = "78%"
+    width     = "30%"
+    height    = 4
+    show_text = false
+    bg_color  = "#1B2432"
+    fg_color  = "#FF4B2B"
+    border_color = "#1B2432"
+}

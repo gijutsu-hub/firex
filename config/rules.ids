@@ -1,0 +1,51 @@
+# FireX signature rules
+#
+#   action proto src sport -> dst dport (options)
+#
+# action    alert | drop | reject
+#             alert   record it, let the packet through
+#             drop    record it and drop silently
+#             reject  record it, drop, and serve the block page
+#           A drop or reject only drops when [threat] inline = yes.
+#
+# options   msg:"..."        what to call it
+#           content:"..."    bytes to match; |de ad be ef| for hex
+#           nocase           fold case for this pattern
+#           offset:N         ignore matches starting before byte N
+#           depth:N          ignore matches ending past offset+N
+#           class:...        malware | c2 | exploit | recon | dos | policy
+#           severity:1-4     1 noise, 4 serious; drives auto-response scoring
+#           sid:N            unique id
+#           rev:N            revision
+#           reference:"..."  where the signature came from
+#
+# A signature matches inside ONE packet. There is no stream reassembly here,
+# so a pattern split across two segments is missed. Keep patterns short and
+# specific enough to land in a single packet.
+
+# ── Canary ───────────────────────────────────────────────────
+# The EICAR test string. Harmless by design and recognised by every scanner,
+# so it is the one signature you can verify end to end without malware.
+alert tcp any any -> any any (msg:"EICAR antivirus test file"; content:"EICAR-STANDARD-ANTIVIRUS-TEST-FILE"; nocase; class:malware; severity:1; sid:1000001; rev:1; reference:"https://www.eicar.org/download-anti-malware-testfile/";)
+
+# ── Reconnaissance ───────────────────────────────────────────
+alert tcp any any -> any 80 (msg:"Admin console probe"; content:"GET /admin"; nocase; offset:0; depth:64; class:recon; severity:2; sid:1000010; rev:1;)
+alert tcp any any -> any 80 (msg:"Environment file probe"; content:"/.env"; nocase; class:recon; severity:3; sid:1000011; rev:1;)
+alert tcp any any -> any 80 (msg:"Git directory probe"; content:"/.git/"; nocase; class:recon; severity:3; sid:1000012; rev:1;)
+alert tcp any any -> any any (msg:"Known scanner user agent"; content:"User-Agent: sqlmap"; nocase; class:recon; severity:3; sid:1000013; rev:1;)
+
+# ── Exploitation ─────────────────────────────────────────────
+drop tcp any any -> any any (msg:"Directory traversal"; content:"../../../"; class:exploit; severity:3; sid:1000020; rev:1;)
+drop tcp any any -> any any (msg:"JNDI lookup, Log4Shell shape"; content:"${jndi:"; nocase; class:exploit; severity:4; sid:1000021; rev:1; reference:"CVE-2021-44228";)
+drop tcp any any -> any any (msg:"Shellshock function definition"; content:"() { :;};"; class:exploit; severity:4; sid:1000022; rev:1; reference:"CVE-2014-6271";)
+alert tcp any any -> any any (msg:"SQL union select"; content:"UNION SELECT"; nocase; class:exploit; severity:3; sid:1000023; rev:1;)
+alert tcp any any -> any any (msg:"NOP sled, x86"; content:"|90 90 90 90 90 90 90 90|"; class:exploit; severity:3; sid:1000024; rev:1;)
+
+# ── Command and control ──────────────────────────────────────
+alert tcp any any -> any any (msg:"Reverse shell over bash /dev/tcp"; content:"/dev/tcp/"; class:c2; severity:4; sid:1000030; rev:1;)
+alert tcp any any -> any any (msg:"Base64 encoded PowerShell"; content:"powershell -enc"; nocase; class:c2; severity:4; sid:1000031; rev:1;)
+alert tcp any any -> any any (msg:"Tor onion address in a request"; content:".onion"; nocase; class:c2; severity:2; sid:1000032; rev:1;)
+
+# ── Policy ───────────────────────────────────────────────────
+alert tcp any any -> any any (msg:"Cleartext credentials in a POST"; content:"password="; nocase; class:policy; severity:2; sid:1000040; rev:1;)
+alert tcp any any -> any 21 (msg:"Plain FTP login"; content:"USER "; offset:0; depth:16; class:policy; severity:1; sid:1000041; rev:1;)

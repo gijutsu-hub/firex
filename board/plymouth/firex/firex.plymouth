@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=FireX
+Description=FireX boot splash
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/firex
+ScriptFile=/usr/share/plymouth/themes/firex/firex.script
